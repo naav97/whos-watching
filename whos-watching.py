@@ -1,41 +1,14 @@
 import os
-import re
-import platform
+import json
+
+from config import *
+from regex_pats import *
 
 suspicious_files = []
+pass_files = []
 
-# Define browser extension directories based on OS
-def get_extension_directories():
-    system = platform.system()
-    if system == "Windows":
-        return [
-            os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\User Data\Default\Extensions"),
-            os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\Edge\User Data\Default\Extensions"),
-        ]
-    elif system == "Darwin":  # macOS
-        return [
-            os.path.expanduser("~/Library/Application Support/Google/Chrome/Default/Extensions"),
-            os.path.expanduser("~/Library/Application Support/Firefox/Profiles"),
-        ]
-    elif system == "Linux":
-        return [
-            #os.path.expanduser("~/.config/google-chrome/Default/Extensions"),
-            #os.path.expanduser("~/.mozilla/firefox"),
-            os.path.expanduser("~/.config/BraveSoftware/Brave-Browser/Default/Extensions"),
-        ]
-    return []
-
-# Example call to list directories
 extension_dirs = get_extension_directories()
 print("Checking extension directories:", extension_dirs)
-
-# Define regular expressions for detecting network requests
-network_patterns = [
-    re.compile(r'\bfetch\b'),                  # fetch API
-    re.compile(r'\bXMLHttpRequest\b'),         # XMLHttpRequest
-    re.compile(r'\baxios\b'),                  # axios library
-    re.compile(r'\b\$\.ajax\b'),               # jQuery AJAX
-]
 
 def read_file(file, root):
     if file.endswith(".js"):
@@ -46,10 +19,12 @@ def read_file(file, root):
                 # Check for network patterns in file content
                 if any(pattern.search(content) for pattern in network_patterns):
                     suspicious_files.append(file_path)
+                if password_input_pattern.search(content) is not None:
+                    pass_files.append(file_path)
         except Exception as e:
             print(f"Error reading {file_path}: {e}")
 
-def scan_extension_for_network_requests(extension_dir):
+def loop_over_files(extension_dir):
     # Walk through the directory to find .js files
     for root, dirs, files in os.walk(extension_dir):
         for file in files:
@@ -57,25 +32,56 @@ def scan_extension_for_network_requests(extension_dir):
 
 def clean():
     global suspicious_files
+    global pass_files
     suspicious_files = []
+    pass_files = []
+
+def find_manifest_file(extension_dir):
+    # Traverse the directory tree to find manifest.json
+    for root, dirs, files in os.walk(extension_dir):
+        if "manifest.json" in files:
+            return os.path.join(root, "manifest.json")
+    return None
+
+def get_extension_name(extension_dir):
+    manifest_path = find_manifest_file(extension_dir)
+    if manifest_path:
+        try:
+            # Check if the manifest.json file exists
+            if os.path.exists(manifest_path):
+                with open(manifest_path, "r", encoding="utf-8") as manifest_file:
+                    manifest_data = json.load(manifest_file)
+                    # Extract and return the name of the extension
+                    return manifest_data.get("name", "Unknown Extension")
+            else:
+                print(f"No manifest.json file found in {extension_dir}")
+                return "Unknown Extension"
+        except Exception as e:
+            print(f"Error reading manifest.json in {extension_dir}: {e}")
+            return "Unknown Extension"
+    return "Unknown Extension"
+
 
 def scan_extension(pdir):
     for extension in os.listdir(pdir):
         ext_path = os.path.join(pdir, extension)
         if os.path.isdir(ext_path):
-            scan_extension_for_network_requests(ext_path)
+            loop_over_files(ext_path)
+            ext_name = get_extension_name(ext_path)
             if suspicious_files:
-                print(f"\nNetwork requests found in extension: {extension}")
+                print(f"\nNetwork requests found in extension: {ext_name}")
                 for file in suspicious_files:
                     print(f"  - {file}")
-                clean()
+            if pass_files:
+                print(f"\nPassword input string found in extension: {ext_name}")
+                for file in pass_files:
+                    print(f"  - {file}")
+            clean()
 
-# Step 4: Scan All Extensions and Output Results
 def scan_all_extensions(extension_dirs):
     for directory in extension_dirs:
         if os.path.exists(directory):
             print(f"\nScanning directory: {directory}")
             scan_extension(directory)
 
-# Run the scan
 scan_all_extensions(extension_dirs)
