@@ -8,3 +8,5 @@ network_patterns = [
 ]
 
 password_input_pattern = re.compile(r'input\s*\[\s*type\s*=\s*["\']password["\']\s*\]')
+
+keylog_pattern = re.compile(r'addEventListener\s*\(\s*[\'"](input|keydown|keyup|keypress)[\'"]\s*,\s*')

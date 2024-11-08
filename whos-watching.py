@@ -6,6 +6,7 @@ from regex_pats import *
 
 suspicious_files = []
 pass_files = []
+keylog_files = []
 
 extension_dirs = get_extension_directories()
 print("Checking extension directories:", extension_dirs)
@@ -21,6 +22,8 @@ def read_file(file, root):
                     suspicious_files.append(file_path)
                 if password_input_pattern.search(content) is not None:
                     pass_files.append(file_path)
+                if keylog_pattern.search(content) is not None:
+                    keylog_files.append(file_path)
         except Exception as e:
             print(f"Error reading {file_path}: {e}")
 
@@ -33,8 +36,10 @@ def loop_over_files(extension_dir):
 def clean():
     global suspicious_files
     global pass_files
+    global keylog_files
     suspicious_files = []
     pass_files = []
+    keylog_files = []
 
 def find_manifest_file(extension_dir):
     # Traverse the directory tree to find manifest.json
@@ -75,6 +80,10 @@ def scan_extension(pdir):
             if pass_files:
                 print(f"\nPassword input string found in extension: {ext_name}")
                 for file in pass_files:
+                    print(f"  - {file}")
+            if keylog_files:
+                print(f"\nEvent listener on keyboard events found in extension: {ext_name}")
+                for file in keylog_files:
                     print(f"  - {file}")
             clean()
 
